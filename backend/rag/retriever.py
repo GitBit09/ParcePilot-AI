@@ -7,7 +7,6 @@ import os
 import pickle
 import numpy as np
 import faiss
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +21,7 @@ _metadata = None
 def _load():
     global _model, _index, _metadata
     if _index is None:
+        from sentence_transformers import SentenceTransformer  # lazy: avoids 55s PyTorch load at startup
         _model = SentenceTransformer("all-MiniLM-L6-v2")
         _index = faiss.read_index(os.path.join(FAISS_INDEX_PATH, "index.faiss"))
         with open(os.path.join(FAISS_INDEX_PATH, "metadata.pkl"), "rb") as f:
