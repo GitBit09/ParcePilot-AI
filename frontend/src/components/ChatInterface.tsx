@@ -270,6 +270,49 @@ export default function ChatInterface({ mode }: { mode: "customer" | "staff" }) 
         background: "var(--bg-glass)",
         backdropFilter: "blur(20px)",
       }}>
+        {/* Dynamic Suggestions (shown when chat is active) */}
+        {!isEmpty && (
+          <div style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            maxWidth: 900,
+            margin: "0 auto 12px auto",
+            paddingBottom: 4,
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={`chip-${i}`}
+                onClick={() => sendMessage(s)}
+                disabled={isLoading}
+                style={{
+                  whiteSpace: "nowrap",
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "999px",
+                  padding: "8px 16px",
+                  color: "var(--text-secondary)",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  fontFamily: "var(--font-sans)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--brand-primary)";
+                  e.currentTarget.style.color = "var(--text-primary)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-subtle)";
+                  e.currentTarget.style.color = "var(--text-secondary)";
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{
           display: "flex",
           gap: 10,
