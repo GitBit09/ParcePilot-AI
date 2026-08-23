@@ -28,7 +28,7 @@ load_dotenv()
 _primary_key = os.getenv("GEMINI_API_KEY", "")
 _client = genai.Client(api_key=_primary_key)
 
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemini-3.5-flash-lite"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
@@ -348,7 +348,8 @@ async def run_agent(
                             )
                         )
                     )
-                current_message = types.Content(role="user", parts=tool_results)
+                # send_message accepts a list of Parts directly
+                current_message = tool_results
             else:
                 # No tool calls — this is the final text response
                 final_text = "".join(text_parts)
