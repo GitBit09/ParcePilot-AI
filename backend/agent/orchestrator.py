@@ -40,7 +40,7 @@ def _rotate_client():
     _client_idx += 1
     print(f"[orchestrator] Rotated to backup Groq key (index {_client_idx % len(_clients)})")
 
-MODEL = "openai/gpt-oss-120b"
+MODEL = "llama-3.3-70b-versatile"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
