@@ -1,6 +1,6 @@
 """
 Orchestrator Agent
-Uses Groq (llama-3.3-70b-versatile) with function calling to coordinate multi-step
+Uses Google GenAI SDK (native) with function calling to coordinate multi-step
 reasoning across doc_search, data_query, and action_executor tools.
 """
 
@@ -8,7 +8,8 @@ import json
 import os
 from typing import AsyncGenerator
 from dotenv import load_dotenv
-from openai import OpenAI
+import google.genai as genai
+from google.genai import types
 
 from agent.tools.doc_search import doc_search
 from agent.tools.data_query import (
@@ -24,25 +25,10 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
-def _make_client(key: str) -> OpenAI:
-    return OpenAI(
-        api_key=key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-    )
+_primary_key = os.getenv("GEMINI_API_KEY", "")
+_client = genai.Client(api_key=_primary_key)
 
-_primary_key   = os.getenv("GEMINI_API_KEY", "")
-_clients       = [_make_client(_primary_key)] if _primary_key else []
-_client_idx    = 0
-
-def _get_client() -> OpenAI:
-    return _clients[_client_idx % len(_clients)]
-
-def _rotate_client():
-    global _client_idx
-    _client_idx += 1
-    print(f"[orchestrator] Rotated to backup Gemini key (index {_client_idx % max(1, len(_clients))})")
-
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-2.5-flash-lite"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
@@ -70,200 +56,158 @@ KEY RULES:
 AVAILABLE TOOLS: doc_search, get_account, get_order, get_orders_for_account, get_ticket, get_tickets_for_account, {staff_tools}prepare_escalation, execute_escalation, prepare_ticket_update, execute_ticket_update, prepare_followup_task, execute_followup_task
 """
 
-TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "doc_search",
-            "description": "Search policy documents, customer agreements, SOPs, and product guides. Use for ANY policy/cancellation/SLA/credit/procedure questions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Natural language question to search for"}
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_account",
-            "description": "Look up account details: plan tier, CSM, contract status.",
-            "parameters": {
-                "type": "object",
-                "properties": {"account_id": {"type": "string"}},
-                "required": ["account_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_order",
-            "description": "Look up order: status, carrier, pickup window, fees, fault attribution.",
-            "parameters": {
-                "type": "object",
-                "properties": {"order_id": {"type": "string"}},
-                "required": ["order_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_orders_for_account",
-            "description": "List all orders for a specific account.",
-            "parameters": {
-                "type": "object",
-                "properties": {"account_id": {"type": "string"}},
-                "required": ["account_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_ticket",
-            "description": "Look up a support ticket by ID.",
-            "parameters": {
-                "type": "object",
-                "properties": {"ticket_id": {"type": "string"}},
-                "required": ["ticket_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_tickets_for_account",
-            "description": "List all support tickets for a specific account.",
-            "parameters": {
-                "type": "object",
-                "properties": {"account_id": {"type": "string"}},
-                "required": ["account_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_all_open_tickets",
-            "description": "STAFF ONLY: Get all open tickets across all accounts.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_all_orders",
-            "description": "STAFF ONLY: Get all orders across all accounts.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "prepare_escalation",
-            "description": "Prepare a ticket escalation. Returns pending action requiring user confirmation before executing.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "account_id": {"type": "string"},
-                    "reason": {"type": "string"},
-                    "priority": {"type": "string", "enum": ["P1", "P2", "P3"]}
-                },
-                "required": ["ticket_id", "account_id", "reason", "priority"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_escalation",
-            "description": "Execute a confirmed escalation. ONLY call after explicit user confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "account_id": {"type": "string"},
-                    "reason": {"type": "string"},
-                    "priority": {"type": "string"}
-                },
-                "required": ["ticket_id", "account_id", "reason", "priority"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "prepare_ticket_update",
-            "description": "Prepare a ticket status update. Returns pending action requiring confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "new_status": {"type": "string"},
-                    "note": {"type": "string"}
-                },
-                "required": ["ticket_id", "new_status", "note"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_ticket_update",
-            "description": "Execute a confirmed ticket update. ONLY after user confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "new_status": {"type": "string"},
-                    "note": {"type": "string"}
-                },
-                "required": ["ticket_id", "new_status", "note"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "prepare_followup_task",
-            "description": "Prepare a follow-up task for a ticket. Returns pending action requiring confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "account_id": {"type": "string"},
-                    "task": {"type": "string"},
-                    "assigned_to": {"type": "string"},
-                    "due_at": {"type": "string"}
-                },
-                "required": ["ticket_id", "account_id", "task", "assigned_to", "due_at"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_followup_task",
-            "description": "Execute a confirmed follow-up task. ONLY after user confirmation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticket_id": {"type": "string"},
-                    "account_id": {"type": "string"},
-                    "task": {"type": "string"},
-                    "assigned_to": {"type": "string"},
-                    "due_at": {"type": "string"}
-                },
-                "required": ["ticket_id", "account_id", "task", "assigned_to", "due_at"]
-            }
-        }
-    },
-]
+# ── Tool Declarations for native GenAI SDK ─────────────────────────────────────
+
+TOOL_DECLARATIONS = types.Tool(function_declarations=[
+    types.FunctionDeclaration(
+        name="doc_search",
+        description="Search policy documents, customer agreements, SOPs, and product guides. Use for ANY policy/cancellation/SLA/credit/procedure questions.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"query": types.Schema(type="STRING", description="Natural language question to search for")},
+            required=["query"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_account",
+        description="Look up account details: plan tier, CSM, contract status.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"account_id": types.Schema(type="STRING")},
+            required=["account_id"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_order",
+        description="Look up order: status, carrier, pickup window, fees, fault attribution.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"order_id": types.Schema(type="STRING")},
+            required=["order_id"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_orders_for_account",
+        description="List all orders for a specific account.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"account_id": types.Schema(type="STRING")},
+            required=["account_id"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_ticket",
+        description="Look up a support ticket by ID.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"ticket_id": types.Schema(type="STRING")},
+            required=["ticket_id"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_tickets_for_account",
+        description="List all support tickets for a specific account.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={"account_id": types.Schema(type="STRING")},
+            required=["account_id"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="get_all_open_tickets",
+        description="STAFF ONLY: Get all open tickets across all accounts.",
+        parameters=types.Schema(type="OBJECT", properties={})
+    ),
+    types.FunctionDeclaration(
+        name="get_all_orders",
+        description="STAFF ONLY: Get all orders across all accounts.",
+        parameters=types.Schema(type="OBJECT", properties={})
+    ),
+    types.FunctionDeclaration(
+        name="prepare_escalation",
+        description="Prepare a ticket escalation. Returns pending action requiring user confirmation before executing.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "account_id": types.Schema(type="STRING"),
+                "reason": types.Schema(type="STRING"),
+                "priority": types.Schema(type="STRING", enum=["P1", "P2", "P3"]),
+            },
+            required=["ticket_id", "account_id", "reason", "priority"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="execute_escalation",
+        description="Execute a confirmed escalation. ONLY call after explicit user confirmation.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "account_id": types.Schema(type="STRING"),
+                "reason": types.Schema(type="STRING"),
+                "priority": types.Schema(type="STRING"),
+            },
+            required=["ticket_id", "account_id", "reason", "priority"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="prepare_ticket_update",
+        description="Prepare a ticket status update. Returns pending action requiring confirmation.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "new_status": types.Schema(type="STRING"),
+                "note": types.Schema(type="STRING"),
+            },
+            required=["ticket_id", "new_status", "note"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="execute_ticket_update",
+        description="Execute a confirmed ticket update. ONLY after user confirmation.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "new_status": types.Schema(type="STRING"),
+                "note": types.Schema(type="STRING"),
+            },
+            required=["ticket_id", "new_status", "note"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="prepare_followup_task",
+        description="Prepare a follow-up task for a ticket. Returns pending action requiring confirmation.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "account_id": types.Schema(type="STRING"),
+                "task": types.Schema(type="STRING"),
+                "assigned_to": types.Schema(type="STRING"),
+                "due_at": types.Schema(type="STRING"),
+            },
+            required=["ticket_id", "account_id", "task", "assigned_to", "due_at"]
+        )
+    ),
+    types.FunctionDeclaration(
+        name="execute_followup_task",
+        description="Execute a confirmed follow-up task. ONLY after user confirmation.",
+        parameters=types.Schema(
+            type="OBJECT",
+            properties={
+                "ticket_id": types.Schema(type="STRING"),
+                "account_id": types.Schema(type="STRING"),
+                "task": types.Schema(type="STRING"),
+                "assigned_to": types.Schema(type="STRING"),
+                "due_at": types.Schema(type="STRING"),
+            },
+            required=["ticket_id", "account_id", "task", "assigned_to", "due_at"]
+        )
+    ),
+])
 
 
 def _call_tool(name: str, args: dict, user: AuthUser) -> dict:
@@ -312,6 +256,7 @@ async def run_agent(
 ) -> AsyncGenerator[dict, None]:
     """
     Run the orchestrator agent and yield SSE-compatible events.
+    Uses the native Google GenAI SDK which correctly handles thought signatures.
     Yields dicts: 'tool_start', 'tool_result', 'text', 'pending_action', 'done'
     """
     is_staff = user.role == "staff"
@@ -332,48 +277,48 @@ async def run_agent(
         staff_tools=staff_tools,
     )
 
-    # Build Groq message history (OpenAI-compatible format)
-    groq_messages = [{"role": "system", "content": system_prompt}]
-    for msg in messages:
-        groq_messages.append({
-            "role": "user" if msg["role"] == "user" else "assistant",
-            "content": msg["content"]
-        })
+    # Build conversation history in native GenAI format
+    history: list[types.Content] = []
+    for msg in messages[:-1]:  # All but the last message go into history
+        role = "user" if msg["role"] == "user" else "model"
+        history.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
+
+    # The last user message is the current prompt
+    last_message = messages[-1]["content"] if messages else ""
 
     tool_calls_made = []
 
     try:
-        # We will loop for a maximum of 10 back-and-forth turns for tool calls
+        # Create a chat session with history
+        chat = _client.chats.create(
+            model=MODEL,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                tools=[TOOL_DECLARATIONS],
+                temperature=0.1,
+            ),
+            history=history,
+        )
+
+        # Agentic loop — up to 10 tool call rounds
+        current_message = last_message
         for _ in range(10):
-            for attempt in range(max(1, len(_clients))):
-                try:
-                    response = _get_client().chat.completions.create(
-                        model=MODEL,
-                        messages=groq_messages,
-                        tools=TOOL_DEFINITIONS,
-                        tool_choice="auto",
-                        max_tokens=4096,
-                    )
-                    break
-                except Exception as e:
-                    print(f"[orchestrator] API error: {e}")
-                    _rotate_client()
-            else:
-                yield {"type": "text", "content": "I'm currently experiencing high traffic or an API error. Please try again in a few moments."}
+            try:
+                response = chat.send_message(current_message)
+            except Exception as e:
+                print(f"[orchestrator] API error: {e}")
+                yield {"type": "text", "content": "I'm currently experiencing an API error. Please try again in a few moments."}
                 return
 
-            msg = response.choices[0].message
-            
-            # Append assistant message to history
-            groq_messages.append(msg)
+            # Process all parts of the response
+            has_tool_calls = False
+            text_parts = []
 
-            if msg.tool_calls:
-                for tc in msg.tool_calls:
-                    tool_name = tc.function.name
-                    try:
-                        tool_args = json.loads(tc.function.arguments)
-                    except Exception:
-                        tool_args = {}
+            for part in response.candidates[0].content.parts:
+                if part.function_call:
+                    has_tool_calls = True
+                    tool_name = part.function_call.name
+                    tool_args = dict(part.function_call.args) if part.function_call.args else {}
 
                     yield {"type": "tool_start", "tool": tool_name, "args": tool_args}
 
@@ -388,22 +333,35 @@ async def run_agent(
 
                     yield {"type": "tool_result", "tool": tool_name, "result": result}
 
-                    # Feed result back into history (Gemini compatibility requires 'name')
-                    groq_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "name": tool_name,
-                        "content": json.dumps(result, default=str)
-                    })
+                elif part.text:
+                    text_parts.append(part.text)
+
+            if has_tool_calls:
+                # Feed all tool results back in a single message
+                tool_results = []
+                for tc_entry in tool_calls_made[-len([p for p in response.candidates[0].content.parts if p.function_call]):]:
+                    tool_results.append(
+                        types.Part(
+                            function_response=types.FunctionResponse(
+                                name=tc_entry["tool"],
+                                response={"result": json.dumps(tc_entry["result"], default=str)}
+                            )
+                        )
+                    )
+                current_message = types.Content(role="user", parts=tool_results)
             else:
-                # Final text response
-                text = msg.content or ""
-                yield {"type": "text", "content": text}
+                # No tool calls — this is the final text response
+                final_text = "".join(text_parts)
+                if not final_text:
+                    yield {"type": "text", "content": "I'm having trouble generating a response. Please try again."}
+                else:
+                    yield {"type": "text", "content": final_text}
                 return
 
         yield {"type": "text", "content": "I've gathered all the information. Let me know if you have any questions."}
+
     except Exception as e:
         print(f"[orchestrator] Fatal error in run_agent: {e}")
-        yield {"type": "text", "content": "\n\n⚠️ An unexpected error occurred while processing your request."}
+        yield {"type": "text", "content": "⚠️ An unexpected error occurred while processing your request."}
     finally:
         yield {"type": "done", "tool_calls": tool_calls_made}

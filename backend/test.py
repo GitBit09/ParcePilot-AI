@@ -1,6 +1,7 @@
-import asyncio, json
-import logging
-logging.basicConfig(level=logging.DEBUG)
+import asyncio
+import sys
+import os
+os.environ["PYTHONUTF8"] = "1"
 
 from agent.orchestrator import run_agent
 from auth.mock_auth import AuthUser
@@ -11,7 +12,13 @@ async def main():
     messages = [{'role': 'user', 'content': 'Show me all my recent orders'}]
     print("Calling run_agent")
     async for event in run_agent(messages, user):
-        print("EVENT:", event)
+        t = event.get("type")
+        if t == "text":
+            print("TEXT:", event["content"].encode("ascii", errors="replace").decode())
+        elif t == "done":
+            print("DONE")
+        else:
+            print("EVENT:", t, event.get("tool", ""))
     print("End main")
 
 asyncio.run(main())
