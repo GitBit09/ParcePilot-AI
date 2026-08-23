@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { ToolBadge } from "./ToolBadge";
 import { ConfirmModal } from "./ConfirmModal";
@@ -18,6 +18,13 @@ export function MessageBubble({
   onDenyAction,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content || "");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   if (isUser) {
     return (
@@ -73,6 +80,15 @@ export function MessageBubble({
               animation: "blink 0.8s ease-in-out infinite", verticalAlign: "text-bottom",
             }} />
           )}
+        </div>
+      )}
+
+      {/* Copy button — only when streaming is done */}
+      {message.content && !message.isStreaming && (
+        <div style={{ marginLeft: 36, display: "flex", justifyContent: "flex-end" }}>
+          <button className="copy-btn" onClick={handleCopy}>
+            {copied ? "✓ Copied!" : "Copy"}
+          </button>
         </div>
       )}
 

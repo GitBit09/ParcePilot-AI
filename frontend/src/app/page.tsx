@@ -118,8 +118,11 @@ export default function LoginPage() {
 
         {/* Quick login */}
         <div className="glass" style={{ padding: 24 }}>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
-            🚀 Quick login (demo accounts)
+          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+            ✨ Try it instantly
+          </p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>
+            Click any account below — no password needed
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {DEMO_ACCOUNTS.map((acc, i) => (

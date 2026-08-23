@@ -14,27 +14,27 @@ interface ConfirmModalProps {
 export function ConfirmModal({ action, onConfirm, onDeny, inline }: ConfirmModalProps) {
   const content = (
     <div style={{
-      background: "var(--bg-elevated)",
-      border: "1px solid rgba(245, 158, 11, 0.4)",
+      background: "rgba(245,158,11,0.05)",
+      border: "1px solid rgba(245, 158, 11, 0.35)",
       borderRadius: "var(--radius-lg)",
       padding: 20,
       maxWidth: 480,
     }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <span style={{ fontSize: 24 }}>⚡</span>
+        <span style={{ fontSize: 22 }}>⚡</span>
         <div>
-          <p style={{ fontSize: 13, fontWeight: 700, color: "#fcd34d", marginBottom: 2 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--sev-p2)", marginBottom: 2 }}>
             Action Confirmation Required
           </p>
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{action.summary}</p>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{action.summary}</p>
         </div>
       </div>
 
       {/* Message */}
       <div style={{
-        background: "rgba(245, 158, 11, 0.07)",
-        border: "1px solid rgba(245, 158, 11, 0.2)",
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: "var(--radius-md)",
         padding: 14,
         marginBottom: 16,

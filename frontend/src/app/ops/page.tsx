@@ -91,19 +91,33 @@ export default function OpsPage() {
             VIEWS
           </p>
           {([
-            ["radar", "🔍 Issue Radar"],
-            ["chat", "💬 AI Assistant"],
-            ["tickets", "🎫 All Tickets"],
-            ["orders", "📦 All Orders"],
-          ] as [Tab, string][]).map(([tab, label]) => (
+            ["radar", "🔍 Issue Radar", null],
+            ["chat", "💬 AI Assistant", null],
+            ["tickets", "🎫 All Tickets", tickets.length],
+            ["orders", "📦 All Orders", orders.length],
+          ] as [Tab, string, number | null][]).map(([tab, label, count]) => (
             <button
               key={tab}
               id={`tab-${tab}`}
               onClick={() => setActiveTab(tab)}
               className={`nav-item ${activeTab === tab ? "active" : ""}`}
-              style={{ width: "100%", marginBottom: 4, border: "none", background: activeTab === tab ? "rgba(99,102,241,0.15)" : "transparent" }}
+              style={{ width: "100%", marginBottom: 4, border: "none", background: activeTab === tab ? "rgba(99,102,241,0.15)" : "transparent", justifyContent: "space-between" }}
             >
-              {label}
+              <span>{label}</span>
+              {count !== null && count > 0 && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  background: "rgba(45,74,138,0.12)",
+                  border: "1px solid var(--border-default)",
+                  color: "var(--brand-primary)",
+                  borderRadius: "var(--radius-full)",
+                  padding: "1px 7px",
+                  minWidth: 22,
+                  textAlign: "center",
+                }}>
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </aside>

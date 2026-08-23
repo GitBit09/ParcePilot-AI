@@ -129,3 +129,11 @@ body { font-family: var(--font-sans); background: var(--bg-base); color: var(--t
 .nav-item.active { background:rgba(45,74,138,0.08); color:var(--brand-primary); border-color:var(--border-default); font-weight:600; }
 
 .spinner { width:18px; height:18px; border:2px solid var(--border-default); border-top-color:var(--brand-accent); border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; flex-shrink:0; }
+
+/* Chip scrollbar - hidden cross-browser */
+.chip-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.chip-scroll::-webkit-scrollbar { display: none; }
+
+/* Copy button on AI messages */
+.copy-btn { background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 3px 10px; font-size: 11px; cursor: pointer; color: var(--text-muted); font-family: var(--font-sans); transition: all 0.15s ease; }
+.copy-btn:hover { background: var(--bg-surface); color: var(--text-secondary); border-color: var(--border-default); }

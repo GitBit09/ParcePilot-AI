@@ -169,6 +169,7 @@ export default function ChatInterface({ mode }: { mode: "customer" | "staff" }) 
   };
 
   const isEmpty = messages.length === 0;
+  const clearChat = () => setMessages([]);
 
   return (
     <div style={{
@@ -250,6 +251,16 @@ export default function ChatInterface({ mode }: { mode: "customer" | "staff" }) 
           </div>
         ) : (
           <>
+            {/* New Chat button */}
+            <div style={{ display: "flex", justifyContent: "flex-end", paddingBottom: 4 }}>
+              <button
+                onClick={clearChat}
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: "5px 12px" }}
+              >
+                + New Chat
+              </button>
+            </div>
             {messages.map((msg, i) => (
               <MessageBubble
                 key={i}
@@ -272,15 +283,14 @@ export default function ChatInterface({ mode }: { mode: "customer" | "staff" }) 
       }}>
         {/* Dynamic Suggestions (shown when chat is active) */}
         {!isEmpty && (
-          <div style={{
+          <div className="chip-scroll"
+            style={{
             display: "flex",
             gap: 8,
             overflowX: "auto",
             maxWidth: 900,
             margin: "0 auto 12px auto",
             paddingBottom: 4,
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
           }}>
             {suggestions.map((s, i) => (
               <button
