@@ -1,18 +1,18 @@
 """
 RAG Indexer: Builds a FAISS vector index from all PDF documents.
+Uses Google Gemini text-embedding-004 for embeddings (no local model needed).
 Run once with: python -m rag.indexer
 Skips deprecated documents from query results (still indexed but flagged).
 """
 
 import os
-import json
 import pickle
 import numpy as np
 import pdfplumber
 import faiss
 from pathlib import Path
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+import google.genai as genai
 
 load_dotenv()
 
@@ -69,9 +69,27 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return chunks
 
 
+def embed_texts(client: genai.Client, texts: list[str]) -> np.ndarray:
+    """Embed a list of texts using gemini-embedding-2."""
+    vectors = []
+    for i, text in enumerate(texts):
+        result = client.models.embed_content(
+            model="gemini-embedding-2",
+            contents=text,
+        )
+        vectors.append(result.embeddings[0].values)
+        if (i + 1) % 10 == 0:
+            print(f"  Embedded {i + 1}/{len(texts)} chunks...")
+    return np.array(vectors, dtype="float32")
+
+
 def build_index():
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable not set")
+
+    client = genai.Client(api_key=api_key)
     os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
-    model = SentenceTransformer("all-MiniLM-L6-v2")
 
     all_chunks = []   # list of text strings
     all_meta = []     # list of metadata dicts
@@ -102,9 +120,8 @@ def build_index():
                     "text": chunk,
                 })
 
-    print(f"\n[ENC] Encoding {len(all_chunks)} chunks...")
-    embeddings = model.encode(all_chunks, show_progress_bar=True, batch_size=32)
-    embeddings = np.array(embeddings, dtype="float32")
+    print(f"\n[ENC] Embedding {len(all_chunks)} chunks with Gemini text-embedding-004...")
+    embeddings = embed_texts(client, all_chunks)
 
     # Build FAISS index
     dim = embeddings.shape[1]
