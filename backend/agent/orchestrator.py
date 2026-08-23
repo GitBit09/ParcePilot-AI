@@ -24,10 +24,13 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
+import httpx
 def _make_client(key: str) -> OpenAI:
+    http_client = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0"))
     return OpenAI(
         api_key=key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        http_client=http_client
     )
 
 _primary_key   = os.getenv("GEMINI_API_KEY", "")
