@@ -8,7 +8,7 @@ import json
 import os
 from typing import AsyncGenerator
 from dotenv import load_dotenv
-from groq import Groq
+from openai import OpenAI
 
 from agent.tools.doc_search import doc_search
 from agent.tools.data_query import (
@@ -24,25 +24,25 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
-import httpx
-def _make_client(key: str) -> Groq:
-    http_client = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0"))
-    return Groq(api_key=key, http_client=http_client)
+def _make_client(key: str) -> OpenAI:
+    return OpenAI(
+        api_key=key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
 
-_primary_key   = os.getenv("GROQ_API_KEY", "")
-_backup_key    = os.getenv("GROQ_API_KEY_BACKUP", "")
-_clients       = [_make_client(k) for k in [_primary_key, _backup_key] if k]
+_primary_key   = os.getenv("GEMINI_API_KEY", "")
+_clients       = [_make_client(_primary_key)] if _primary_key else []
 _client_idx    = 0
 
-def _get_client() -> Groq:
+def _get_client() -> OpenAI:
     return _clients[_client_idx % len(_clients)]
 
 def _rotate_client():
     global _client_idx
     _client_idx += 1
-    print(f"[orchestrator] Rotated to backup Groq key (index {_client_idx % len(_clients)})")
+    print(f"[orchestrator] Rotated to backup Gemini key (index {_client_idx % max(1, len(_clients))})")
 
-MODEL = "openai/gpt-oss-120b"
+MODEL = "gemini-1.5-flash"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
