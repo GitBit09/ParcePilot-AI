@@ -42,7 +42,7 @@ def _rotate_client():
     _client_idx += 1
     print(f"[orchestrator] Rotated to backup Gemini key (index {_client_idx % max(1, len(_clients))})")
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-3.5-flash"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
