@@ -269,41 +269,41 @@ async def run_agent(
     Uses the native Google GenAI SDK (deferred import) for thought-signature safety.
     Yields dicts: 'tool_start', 'tool_result', 'text', 'pending_action', 'done'
     """
-    import google.genai as genai
-    from google.genai import types
-
-    is_staff = user.role == "staff"
-
-    role_context = (
-        f"You are helping {user.display_name} ({user.account_name} — customer). "
-        f"They can only access data for their own account ({user.account_id})."
-        if not is_staff else
-        f"You are helping {user.display_name}, a ParcelPilot support staff member. "
-        f"You have full access to all accounts, orders, and tickets."
-    )
-
-    staff_tools = "get_all_open_tickets, get_all_orders, " if is_staff else ""
-
-    system_prompt = SYSTEM_PROMPT.format(
-        snapshot=DATASET_SNAPSHOT,
-        role_context=role_context,
-        staff_tools=staff_tools,
-    )
-
-    # Get (or lazily initialize) the SDK client and tool declarations
-    client, tool_declarations = _get_sdk()
-
-    # Build conversation history in native GenAI format
-    history: list[types.Content] = []
-    for msg in messages[:-1]:
-        role = "user" if msg["role"] == "user" else "model"
-        history.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
-
-    last_message = messages[-1]["content"] if messages else ""
-
     tool_calls_made = []
 
     try:
+        import google.genai as genai
+        from google.genai import types
+
+        is_staff = user.role == "staff"
+
+        role_context = (
+            f"You are helping {user.display_name} ({user.account_name} — customer). "
+            f"They can only access data for their own account ({user.account_id})."
+            if not is_staff else
+            f"You are helping {user.display_name}, a ParcelPilot support staff member. "
+            f"You have full access to all accounts, orders, and tickets."
+        )
+
+        staff_tools = "get_all_open_tickets, get_all_orders, " if is_staff else ""
+
+        system_prompt = SYSTEM_PROMPT.format(
+            snapshot=DATASET_SNAPSHOT,
+            role_context=role_context,
+            staff_tools=staff_tools,
+        )
+
+        # Get (or lazily initialize) the SDK client and tool declarations
+        client, tool_declarations = _get_sdk()
+
+        # Build conversation history in native GenAI format
+        history = []
+        for msg in messages[:-1]:
+            role = "user" if msg["role"] == "user" else "model"
+            history.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
+
+        last_message = messages[-1]["content"] if messages else ""
+
         chat = client.chats.create(
             model=MODEL,
             config=types.GenerateContentConfig(
