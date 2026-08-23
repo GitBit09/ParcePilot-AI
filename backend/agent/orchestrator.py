@@ -24,8 +24,10 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
+import httpx
 def _make_client(key: str) -> Groq:
-    return Groq(api_key=key)
+    http_client = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0"))
+    return Groq(api_key=key, http_client=http_client)
 
 _primary_key   = os.getenv("GROQ_API_KEY", "")
 _backup_key    = os.getenv("GROQ_API_KEY_BACKUP", "")
@@ -40,7 +42,7 @@ def _rotate_client():
     _client_idx += 1
     print(f"[orchestrator] Rotated to backup Groq key (index {_client_idx % len(_clients)})")
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
 
 SYSTEM_PROMPT = """You are ParcelPilot's AI support assistant. ParcelPilot is a logistics SaaS platform.
