@@ -25,8 +25,14 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
-_primary_key = os.getenv("GEMINI_API_KEY", "")
-_client = genai.Client(api_key=_primary_key)
+_client = None
+
+def _get_genai_client() -> genai.Client:
+    global _client
+    if _client is None:
+        key = os.getenv("GEMINI_API_KEY", "")
+        _client = genai.Client(api_key=key)
+    return _client
 
 MODEL = "gemini-3.5-flash-lite"
 DATASET_SNAPSHOT = "2026-08-16 11:00 IST"
@@ -116,12 +122,10 @@ TOOL_DECLARATIONS = types.Tool(function_declarations=[
     types.FunctionDeclaration(
         name="get_all_open_tickets",
         description="STAFF ONLY: Get all open tickets across all accounts.",
-        parameters=types.Schema(type="OBJECT", properties={})
     ),
     types.FunctionDeclaration(
         name="get_all_orders",
         description="STAFF ONLY: Get all orders across all accounts.",
-        parameters=types.Schema(type="OBJECT", properties={})
     ),
     types.FunctionDeclaration(
         name="prepare_escalation",
@@ -290,7 +294,7 @@ async def run_agent(
 
     try:
         # Create a chat session with history
-        chat = _client.chats.create(
+        chat = _get_genai_client().chats.create(
             model=MODEL,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
