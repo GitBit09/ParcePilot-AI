@@ -24,13 +24,10 @@ from auth.mock_auth import AuthUser
 
 load_dotenv()
 
-import httpx
 def _make_client(key: str) -> OpenAI:
-    http_client = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0"))
     return OpenAI(
         api_key=key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        http_client=http_client
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
 
 _primary_key   = os.getenv("GEMINI_API_KEY", "")
@@ -345,64 +342,68 @@ async def run_agent(
 
     tool_calls_made = []
 
-    for _ in range(10):  # max 10 tool calls per turn
-        for attempt in range(max(1, len(_clients))):
-            try:
-                response = _get_client().chat.completions.create(
-                    model=MODEL,
-                    messages=groq_messages,
-                    tools=TOOL_DEFINITIONS,
-                    tool_choice="auto",
-                    max_tokens=4096,
-                )
-                break
-            except Exception as e:
-                print(f"[orchestrator] API error: {e}")
-                _rotate_client()
-        else:
-            yield {"type": "text", "content": "I'm currently experiencing high traffic or an API error. Please try again in a few moments."}
-            yield {"type": "done", "tool_calls": tool_calls_made}
-            return
-
-        msg = response.choices[0].message
-
-        # Append assistant message to history
-        groq_messages.append(msg)
-
-        if msg.tool_calls:
-            for tc in msg.tool_calls:
-                tool_name = tc.function.name
+    try:
+        # We will loop for a maximum of 10 back-and-forth turns for tool calls
+        for _ in range(10):
+            for attempt in range(max(1, len(_clients))):
                 try:
-                    tool_args = json.loads(tc.function.arguments)
-                except Exception:
-                    tool_args = {}
+                    response = _get_client().chat.completions.create(
+                        model=MODEL,
+                        messages=groq_messages,
+                        tools=TOOL_DEFINITIONS,
+                        tool_choice="auto",
+                        max_tokens=4096,
+                    )
+                    break
+                except Exception as e:
+                    print(f"[orchestrator] API error: {e}")
+                    _rotate_client()
+            else:
+                yield {"type": "text", "content": "I'm currently experiencing high traffic or an API error. Please try again in a few moments."}
+                return
 
-                yield {"type": "tool_start", "tool": tool_name, "args": tool_args}
+            msg = response.choices[0].message
+            
+            # Append assistant message to history
+            groq_messages.append(msg)
 
-                result = _call_tool(tool_name, tool_args, user)
-                tool_calls_made.append({"tool": tool_name, "args": tool_args, "result": result})
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tool_name = tc.function.name
+                    try:
+                        tool_args = json.loads(tc.function.arguments)
+                    except Exception:
+                        tool_args = {}
 
-                # Check for pending confirmation
-                if result.get("status") == "pending_confirmation":
+                    yield {"type": "tool_start", "tool": tool_name, "args": tool_args}
+
+                    result = _call_tool(tool_name, tool_args, user)
+                    tool_calls_made.append({"tool": tool_name, "args": tool_args, "result": result})
+
+                    # Check for pending confirmation
+                    if result.get("status") == "pending_confirmation":
+                        yield {"type": "tool_result", "tool": tool_name, "result": result}
+                        yield {"type": "pending_action", "action": result}
+                        return
+
                     yield {"type": "tool_result", "tool": tool_name, "result": result}
-                    yield {"type": "pending_action", "action": result}
-                    yield {"type": "done", "tool_calls": tool_calls_made}
-                    return
 
-                yield {"type": "tool_result", "tool": tool_name, "result": result}
+                    # Feed result back into history (Gemini compatibility requires 'name')
+                    groq_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": tool_name,
+                        "content": json.dumps(result, default=str)
+                    })
+            else:
+                # Final text response
+                text = msg.content or ""
+                yield {"type": "text", "content": text}
+                return
 
-                # Feed result back into history
-                groq_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": json.dumps(result, default=str)
-                })
-        else:
-            # Final text response
-            text = msg.content or ""
-            yield {"type": "text", "content": text}
-            yield {"type": "done", "tool_calls": tool_calls_made}
-            return
-
-    yield {"type": "text", "content": "I've gathered all the information. Let me know if you have any questions."}
-    yield {"type": "done", "tool_calls": tool_calls_made}
+        yield {"type": "text", "content": "I've gathered all the information. Let me know if you have any questions."}
+    except Exception as e:
+        print(f"[orchestrator] Fatal error in run_agent: {e}")
+        yield {"type": "text", "content": "\n\n⚠️ An unexpected error occurred while processing your request."}
+    finally:
+        yield {"type": "done", "tool_calls": tool_calls_made}
