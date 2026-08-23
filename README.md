@@ -5,8 +5,8 @@
 
 ## Live Demo
 
-- **Frontend**: [Deployed on Vercel](https://parcelPilot-ai.vercel.app) *(link after deployment)*
-- **Backend API**: [Deployed on Render](https://parcelPilot-api.onrender.com) *(link after deployment)*
+- **Frontend**: [https://parce-pilot-ai.vercel.app](https://parce-pilot-ai.vercel.app)
+- **Backend API**: [https://parcelpilot-backend-q1lr.onrender.com](https://parcelpilot-backend-q1lr.onrender.com)
 
 ---
 
