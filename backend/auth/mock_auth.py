@@ -90,12 +90,30 @@ def authenticate(token: str) -> Optional[AuthUser]:
     return AuthUser(**user_data)
 
 
+import hashlib
+
 def login(email: str, password: str) -> Optional[dict]:
-    """Mock login: returns token on success."""
+    """Mock login: returns token on success. If unknown email, creates a guest customer."""
     creds = LOGIN_CREDENTIALS.get(email)
-    if not creds or creds["password"] != password:
-        return None
-    token = creds["token"]
+    if creds:
+        if creds["password"] != password:
+            return None
+        token = creds["token"]
+        user = MOCK_USERS[token]
+        return {"token": token, "user": user}
+        
+    # Auto-provision guest user for any other email
+    token = f"token-guest-{hashlib.md5(email.encode()).hexdigest()[:8]}"
+    
+    if token not in MOCK_USERS:
+        MOCK_USERS[token] = {
+            "user_id": email,
+            "account_id": "ACCT-GUEST",
+            "account_name": "Guest Account",
+            "role": "customer",
+            "display_name": email.split('@')[0],
+        }
+        
     user = MOCK_USERS[token]
     return {"token": token, "user": user}
 
