@@ -355,7 +355,8 @@ async def run_agent(
                 print(f"[orchestrator] API error: {e}")
                 _rotate_client()
         else:
-            yield {"type": "content", "content": "I'm currently experiencing high traffic and my backup API keys are also exhausted. Please try again in a few moments."}
+            yield {"type": "text", "content": "I'm currently experiencing high traffic or an API error. Please try again in a few moments."}
+            yield {"type": "done", "tool_calls": tool_calls_made}
             return
 
         msg = response.choices[0].message
